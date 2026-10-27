@@ -5,3 +5,12 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# Go
+bin/
+*.exe
+*.test
+*.out
+
+# Personal planning notes (local only)
+plans/
