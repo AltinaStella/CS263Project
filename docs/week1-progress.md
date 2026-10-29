@@ -10,7 +10,8 @@ Reading list: [../readings/README.md](../readings/README.md). Reading log: [read
 - [x] `scripts/sweep_gogc.sh` and `scripts/plot_week1.py` for the GOGC sanity sweep
 - [x] Draft research questions and experiment design (`docs/experiment-design.md`)
 - [x] Reading list organized by topic, with local copies of the Go docs (`readings/`)
-- [ ] Background reading and notes (`docs/background.md`)
+- [x] Background reading and notes, part 1: GC design, tuning knobs, pacer, Green Tea (`docs/background.md` sections 1-4)
+- [ ] Background reading and notes, part 2: observability and prior work (sections 5-6)
 - [ ] Sweep run on the experiment machine, with the figure added below
 
 ## Sanity check result

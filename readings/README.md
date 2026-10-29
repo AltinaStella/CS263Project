@@ -11,7 +11,7 @@ P2 = needed before the controller (week 4), P3 = background.
 
 ## A. Go GC fundamentals
 
-- [ ] **P1** A Guide to the Go Garbage Collector - [local](go-official/gc-guide.html) / https://go.dev/doc/gc-guide
+- [x] **P1** A Guide to the Go Garbage Collector - [local](go-official/gc-guide.html) / https://go.dev/doc/gc-guide
   The main reference. Explains the cost model (GC CPU vs. heap size), GOGC, the
   memory limit, and the "death spiral" risk. Background sections 1-2.
 - [ ] **P3** Getting to Go: The Journey of Go's Garbage Collector (ISMM 2018 keynote) - [local](go-official/blog-getting-to-go-ismm-keynote.html) / https://go.dev/blog/ismmkeynote
@@ -19,10 +19,10 @@ P2 = needed before the controller (week 4), P3 = background.
 
 ## B. Tuning knobs and the pacer
 
-- [ ] **P1** Proposal 48409: Soft memory limit - [local](go-official/proposal-48409-soft-memory-limit.md)
+- [x] **P1** Proposal 48409: Soft memory limit - [local](go-official/proposal-48409-soft-memory-limit.md)
   Design of GOMEMLIMIT, including the GC CPU cap (about 50%) that limits the death
   spiral. Defines the knob the controller will adjust.
-- [ ] **P1** Proposal 44167: GC pacer redesign - [local](go-official/proposal-44167-gc-pacer-redesign.md)
+- [x] **P1** Proposal 44167: GC pacer redesign - [local](go-official/proposal-44167-gc-pacer-redesign.md)
   What the runtime already adapts on its own. The controller must add something
   the pacer does not already do.
 - [ ] **P3** Go 1.5 concurrent GC pacing (original design) - https://golang.org/s/go15gcpacing
@@ -39,10 +39,10 @@ P2 = needed before the controller (week 4), P3 = background.
 
 ## D. Recent runtime changes
 
-- [ ] **P1** The Green Tea Garbage Collector (Go blog) - [local](go-official/blog-greenteagc.html) / https://go.dev/blog/greenteagc
+- [x] **P1** The Green Tea Garbage Collector (Go blog) - [local](go-official/blog-greenteagc.html) / https://go.dev/blog/greenteagc
   The new default marking algorithm since Go 1.26. Need to know whether it changes
   how GOGC and GOMEMLIMIT behave.
-- [ ] **P1** Go 1.26 release notes - [local](go-official/release-notes-go1.26.html) / https://go.dev/doc/go1.26
+- [x] **P1** Go 1.26 release notes - [local](go-official/release-notes-go1.26.html) / https://go.dev/doc/go1.26
   Green Tea becomes the default; check runtime and GC sections.
 - [ ] **P2** Go 1.27 release notes - [local](go-official/release-notes-go1.27.html) / https://go.dev/doc/go1.27
   The toolchain used for experiments (1.27.3). Check runtime changes such as
