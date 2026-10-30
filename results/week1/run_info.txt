@@ -1,0 +1,9 @@
+date: 2026-10-29T06:11:26Z
+go: go version go1.27.3 windows/amd64
+host: MINGW64_NT-10.0-26200 3.3.6-bec3d608-341.x86_64 x86_64
+GOMAXPROCS: 4  GOEXPERIMENT: default
+rate=200MiB/s lifetime=500ms duration=10s
+gcprobe: go1.27.3, GOMAXPROCS=4, objects=2047166, gc_cycles=48, gc_cpu_frac=0.0023, final mem_total=166.9 MiB
+gcprobe: go1.27.3, GOMAXPROCS=4, objects=2048073, gc_cycles=24, gc_cpu_frac=0.0012, final mem_total=216.7 MiB
+gcprobe: go1.27.3, GOMAXPROCS=4, objects=2048029, gc_cycles=12, gc_cpu_frac=0.0011, final mem_total=323.7 MiB
+gcprobe: go1.27.3, GOMAXPROCS=4, objects=2048064, gc_cycles=6, gc_cpu_frac=0.0005, final mem_total=538.8 MiB
