@@ -114,15 +114,70 @@ optional.
 
 ## 5. Observability
 
-- `runtime/metrics`, `GODEBUG=gctrace=1`, `runtime/trace`
-- TODO: which metrics the controller can read cheaply at run time
+Sources so far: Uber GOGCTuner post, Twitch ballast post. The `runtime/metrics`
+package docs (reading list C) are still to read.
+
+- Tools: `runtime/metrics` (what gcprobe samples), `GODEBUG=gctrace=1` (one line
+  per cycle, for cross-checking cycle counts), `runtime/trace` and pprof.
+- **Polling cost and timing.** Uber's first tuner read heap stats from a 1 s
+  ticker. It was too costly (reading the stats needed a stop-the-world at the
+  time) and too coarse, because several GC cycles can happen within one second.
+- **Per-cycle hook.** Uber replaced polling with a finalizer that re-arms itself,
+  so it runs once after every GC cycle. The controller gets called exactly at
+  cycle boundaries, which is also when the heap goal is recomputed.
+- **Metrics Uber found useful:** time between GCs (if it reaches the 2-minute
+  forced GC, GOGC has nothing left to tune), GC CPU share, estimated p99 live
+  heap (to tell a leak from a larger GOGC), and the GOGC values the tuner chose.
+- **Seeing assists.** Twitch found the latency cause only with the execution
+  tracer: during a cycle, request goroutines were doing mark assist work. Pause
+  times alone (single-digit ms) did not explain a p99 gap of hundreds of ms.
+
+**For this project:** the controller should react per GC cycle rather than on a
+fixed timer, and gcprobe should log time between cycles and GC CPU share, as Uber
+did. Assist time is the link between GC and p99, so the week 2 workload should
+record it if `runtime/metrics` exposes it (check `/cpu/classes/gc/mark/assist`).
+TODO after reading the `runtime/metrics` docs: confirm which metrics are cheap to
+read at run time.
 
 ## 6. Prior work on automatic GC tuning
 
-- **Uber GOGCTuner**: adjusts GOGC from the memory limit of the container
-- **Twitch memory ballast**: a large unused allocation to raise the heap target; mostly superseded by GOMEMLIMIT
-- TODO: anything else found (papers on GC auto-tuning for the JVM, etc.)
-- **How this project differs:** TODO
+- **Twitch memory ballast (2019, Go 1.11).** The API frontend ran 8-10 GC cycles
+  per second with a heap under 450 MiB on a 64 GiB VM, and about 30% of CPU went
+  to GC. A 10 GiB `[]byte` kept alive at startup raised the heap target. It costs
+  almost nothing: no pointers to scan, and untouched pages stay virtual. GC cycles
+  fell by about 99%, CPU by about 30%, and peak p99 API latency by about 45%. The
+  latency gain came from far fewer GC assists, not shorter pauses. They chose a
+  ballast over a large GOGC because they cared about absolute memory, not a ratio.
+  GOMEMLIMIT now covers this use case.
+- **Uber GOGCTuner (before Go 1.19).** A fixed GOGC ignores the container limit
+  (OOM risk) and fits instances with very different live heaps badly (1 GB vs.
+  100 MB in one sharded service). The tuner reads the cgroup limit and recomputes
+  GOGC so the heap target stays at about 70% of it. If the live heap is already
+  above that, it falls back to 1.25x the live heap. Reported savings: about 70K
+  cores; p99 CPU down about 65% and 30% for two services. Latency benefits are only
+  mentioned, not measured.
+- **Blackburn, Cheng, McKinley (SIGMETRICS 2004).** Compares canonical Java
+  collectors in one toolkit, with each run at a fixed heap size swept as a multiple
+  of the minimum heap, and total time split into mutator and GC time. GC time drops
+  steeply as the heap grows. In small heaps, collection frequency dominates; in
+  larger heaps, effects on mutator locality matter more. Their collector comparison
+  does not carry over to Go (non-generational, non-moving), but the method does.
+- **Lengauer, Mossenbock (ICPE 2014).** Black-box tuning of all HotSpot GC
+  parameters per application, using iterated local search over offline runs.
+  The result is one fixed configuration per application, not a runtime controller.
+
+**How this project differs:**
+- *Online, not offline.* Lengauer searches for one fixed setting ahead of time;
+  this controller changes settings while the workload changes phase.
+- *Latency as a signal and a metric.* Uber tunes only on memory and reports CPU;
+  Twitch shows that GC frequency drives p99 through assists. This project measures
+  p99 directly and lets the controller see it.
+- *Controlled comparison.* Both industry posts report production before/after
+  numbers. This project compares the controller against default and tuned fixed
+  baselines, under the same memory budgets, with repetitions.
+- *Current runtime.* Both posts predate GOMEMLIMIT and Green Tea. With both
+  available, the remaining gain from tuning is an open question that this project
+  measures on Go 1.27.
 
 ## References
 
@@ -134,3 +189,5 @@ optional.
 6. Uber Engineering: How we saved 70K cores across 30 mission-critical services. https://www.uber.com/blog/how-we-saved-70k-cores-across-30-mission-critical-services/
 7. Twitch: Go memory ballast. https://blog.twitch.tv/en/2019/04/10/go-memory-ballast-how-i-learnt-to-stop-worrying-and-love-the-heap/
 8. The Go Blog: The Green Tea Garbage Collector. https://go.dev/blog/greenteagc
+9. S. M. Blackburn, P. Cheng, K. S. McKinley. Myths and Realities: The Performance Impact of Garbage Collection. SIGMETRICS 2004. https://doi.org/10.1145/1005686.1005693
+10. P. Lengauer, H. Mossenbock. The Taming of the Shrew: Increasing Performance by Automatic Parameter Tuning for Java Garbage Collectors. ICPE 2014. https://doi.org/10.1145/2568088.2568091

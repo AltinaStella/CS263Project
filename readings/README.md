@@ -50,10 +50,10 @@ P2 = needed before the controller (week 4), P3 = background.
 
 ## E. Industry adaptive tuning (closest prior work)
 
-- [ ] **P1** Uber: How we saved 70K cores across 30 mission-critical services - https://www.uber.com/blog/how-we-saved-70k-cores-across-30-mission-critical-services/
+- [x] **P1** Uber: How we saved 70K cores across 30 mission-critical services - https://www.uber.com/blog/how-we-saved-70k-cores-across-30-mission-critical-services/
   GOGCTuner: sets GOGC dynamically from the container memory limit. The main
   baseline idea to compare with.
-- [ ] **P2** Twitch: Go memory ballast - https://blog.twitch.tv/en/2019/04/10/go-memory-ballast-how-i-learnt-to-stop-worrying-and-love-the-heap/
+- [x] **P2** Twitch: Go memory ballast - https://blog.twitch.tv/en/2019/04/10/go-memory-ballast-how-i-learnt-to-stop-worrying-and-love-the-heap/
   An early workaround for a heap target that is too small; mostly replaced by GOMEMLIMIT.
 - [ ] **P2** bytedance gopkg `gctuner` - https://pkg.go.dev/github.com/bytedance/gopkg/util/gctuner
   Open-source GOGC tuner based on a memory threshold. Possible baseline for week 5.
@@ -62,11 +62,11 @@ P2 = needed before the controller (week 4), P3 = background.
 
 ## F. Academic work on GC performance and tuning
 
-- [ ] **P2** Blackburn, Cheng, McKinley. Myths and Realities: The Performance Impact of Garbage Collection. SIGMETRICS 2004. https://doi.org/10.1145/1005686.1005693
+- [x] **P2** Blackburn, Cheng, McKinley. Myths and Realities: The Performance Impact of Garbage Collection. SIGMETRICS 2004. https://doi.org/10.1145/1005686.1005693
   Classic study of the space-time trade-off of GC; supports the RQ1 framing.
 - [ ] **P2** Hertz, Berger. Quantifying the Performance of Garbage Collection vs. Explicit Memory Management. OOPSLA 2005. https://doi.org/10.1145/1094811.1094836
   Shows how GC cost depends on heap size relative to live data.
-- [ ] **P2** Lengauer, Mossenbock. The Taming of the Shrew: Increasing Performance by Automatic Parameter Tuning for Java Garbage Collectors. ICPE 2014. https://doi.org/10.1145/2568088.2568091
+- [x] **P2** Lengauer, Mossenbock. The Taming of the Shrew: Increasing Performance by Automatic Parameter Tuning for Java Garbage Collectors. ICPE 2014. https://doi.org/10.1145/2568088.2568091
   Automatic GC parameter tuning for the JVM; closest academic related work.
 - [ ] **P2** Singer, Kovoor, Brown, Lujan. Garbage Collection Auto-Tuning for Java MapReduce on Multi-Cores. ISMM 2011. https://doi.org/10.1145/1993478.1993495
   Machine-learning-based GC tuning; another related approach.
