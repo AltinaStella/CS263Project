@@ -1,0 +1,15 @@
+{
+  "name": "scratch/runner-smoke",
+  "reps": 2,
+  "gomaxprocs": 4,
+  "cooldown": 1,
+  "common": {"duration": "4s", "warmup": "1s", "cache": 64},
+  "workloads": {
+    "steady": {"rate": 10000},
+    "phase": {"phases": "2s:rate=5000;2s:rate=20000,cache=128"}
+  },
+  "configs": {
+    "default": {},
+    "gogc400": {"gogc": "400"}
+  }
+}
