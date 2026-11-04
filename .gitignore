@@ -14,3 +14,6 @@ bin/
 
 # Personal planning notes (local only)
 plans/
+
+# Ad-hoc test runs
+results/scratch/
