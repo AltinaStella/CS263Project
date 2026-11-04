@@ -99,3 +99,10 @@ func (s *histSnap) maxMs() float64 {
 	}
 	return 0
 }
+
+func (s *histSnap) summary() latencySummary {
+	return latencySummary{
+		P50: s.quantileMs(0.5), P90: s.quantileMs(0.9), P99: s.quantileMs(0.99),
+		P999: s.quantileMs(0.999), Max: s.maxMs(),
+	}
+}

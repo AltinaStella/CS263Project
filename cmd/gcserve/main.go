@@ -126,6 +126,7 @@ type rtSample struct {
 	gcCycles, heapLive, heapGoal, heapAllocs, memTotal float64
 	cpuTotal, cpuIdle, cpuGC, cpuAssist                float64
 	gogc, memLimit                                     float64
+	cpuIdleMark                                        float64
 }
 
 var rtNames = []string{
@@ -140,6 +141,7 @@ var rtNames = []string{
 	"/cpu/classes/gc/mark/assist:cpu-seconds",
 	"/gc/gogc:percent",
 	"/gc/gomemlimit:bytes",
+	"/cpu/classes/gc/mark/idle:cpu-seconds",
 }
 
 type rtReader struct{ samples []metrics.Sample }
@@ -163,12 +165,18 @@ func (r *rtReader) read() rtSample {
 			v[i] = s.Value.Float64()
 		}
 	}
-	return rtSample{v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10]}
+	return rtSample{v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11]}
 }
 
 // busy is CPU time spent on anything but idling; it is the denominator for
 // GC fractions, so idle Ps (see week 1 known issue) do not dilute them.
 func (s rtSample) busy() float64 { return s.cpuTotal - s.cpuIdle }
+
+// Idle-priority mark workers run GC on Ps that would otherwise be idle, so
+// their time is not taken from the program. demand() is non-idle CPU minus
+// that time, and gcDemand() is the GC CPU the program actually paid for.
+func (s rtSample) demand() float64   { return s.busy() - s.cpuIdleMark }
+func (s rtSample) gcDemand() float64 { return s.cpuGC - s.cpuIdleMark }
 
 func frac(num, den float64) float64 {
 	if den <= 0 {
@@ -220,17 +228,23 @@ type summary struct {
 	Dropped       uint64         `json:"dropped"`
 	ThroughputRPS float64        `json:"throughput_rps"`
 	LatencyMs     latencySummary `json:"latency_ms"`
+	ServiceMs     latencySummary `json:"service_ms"`      // from dispatch, no generator lag
+	DispatchLagMs latencySummary `json:"dispatch_lag_ms"` // generator lateness
 
 	GCCycles        uint64  `json:"gc_cycles"`
-	GCCPUFrac       float64 `json:"gc_cpu_frac"`        // GC / all CPU incl. idle (as in week 1)
-	GCBusyFrac      float64 `json:"gc_busy_frac"`       // GC / non-idle CPU
-	AssistBusyFrac  float64 `json:"assist_busy_frac"`   // mark assists / non-idle CPU
-	CPUMsPerRequest float64 `json:"cpu_ms_per_request"` // non-idle CPU / completed requests
-	PeakMemTotalMiB float64 `json:"peak_mem_total_mib"`
-	MeanMemTotalMiB float64 `json:"mean_mem_total_mib"`
-	PeakHeapLiveMiB float64 `json:"peak_heap_live_mib"`
-	FinalGOGC       string  `json:"final_gogc"`
-	FinalLimitMiB   string  `json:"final_memlimit_mib"`
+	GCCPUFrac       float64 `json:"gc_cpu_frac"`         // GC / all CPU incl. idle (as in week 1)
+	GCBusyFrac      float64 `json:"gc_busy_frac"`        // GC / non-idle CPU
+	AssistBusyFrac  float64 `json:"assist_busy_frac"`    // mark assists / non-idle CPU
+	CPUMsPerRequest float64 `json:"cpu_ms_per_request"`  // non-idle CPU / completed requests
+	IdleMarkFrac    float64 `json:"idle_mark_busy_frac"` // idle-priority marking / non-idle CPU
+	// Same as gc_busy_frac and cpu_ms_per_request, but leaving out idle marking.
+	GCDemandFrac       float64 `json:"gc_demand_frac"`
+	DemandMsPerRequest float64 `json:"demand_cpu_ms_per_request"`
+	PeakMemTotalMiB    float64 `json:"peak_mem_total_mib"`
+	MeanMemTotalMiB    float64 `json:"mean_mem_total_mib"`
+	PeakHeapLiveMiB    float64 `json:"peak_heap_live_mib"`
+	FinalGOGC          string  `json:"final_gogc"`
+	FinalLimitMiB      string  `json:"final_memlimit_mib"`
 }
 
 func main() {
@@ -258,8 +272,10 @@ func main() {
 	cw.Write([]string{
 		"t_sec", "phase", "offered_rps", "done_rps", "dropped", "queue_len",
 		"p50_ms", "p99_ms", "p999_ms", "max_ms",
+		"svc_p50_ms", "svc_p99_ms", "lag_p50_ms", "lag_p99_ms",
 		"gc_cycles", "heap_live_mib", "heap_goal_mib", "mem_total_mib", "alloc_rate_mibps",
-		"gc_cpu_frac", "gc_busy_frac", "assist_busy_frac", "gogc", "memlimit_mib",
+		"gc_cpu_frac", "gc_busy_frac", "assist_busy_frac", "idle_mark_busy_frac", "gc_demand_frac",
+		"gogc", "memlimit_mib",
 	})
 
 	s := newServer(c.sched, c.entryKiB)
@@ -268,7 +284,7 @@ func main() {
 	runtime.GC() // start from a collected heap that holds only the cache
 
 	rt := newRTReader()
-	queue := make(chan int64, c.queueCap)
+	queue := make(chan arrival, c.queueCap)
 	var wg sync.WaitGroup
 	s.start = time.Now()
 	for i := range c.workers {
@@ -286,7 +302,14 @@ func main() {
 		close(done)
 	}()
 
-	iv, total := new(histSnap), new(histSnap)
+	// Index 0 = latency from scheduled arrival, 1 = from dispatch, 2 = dispatch lag.
+	srcs := [3]*hist{&s.hist, &s.svcHist, &s.lagHist}
+	iv, total := new([3]histSnap), new([3]histSnap)
+	addAll := func() {
+		for k := range total {
+			total[k].add(&iv[k])
+		}
+	}
 	prev, prevT, prevDropped := rt.read(), 0.0, uint64(0)
 	// warm is the runtime state when the measured period starts.
 	var warm *rtSample
@@ -307,13 +330,15 @@ func main() {
 			running = false
 		}
 		t := time.Since(s.start).Seconds()
-		iv.reset()
-		s.hist.drainInto(iv)
+		for k := range iv {
+			iv[k].reset()
+			srcs[k].drainInto(&iv[k])
+		}
 		if !running && t-prevT < c.interval.Seconds()/10 {
 			// The run ended just after a tick: fold the last few requests into
 			// the summary instead of writing a near-empty CSV row.
 			if warm != nil {
-				total.add(iv)
+				addAll()
 			}
 			break
 		}
@@ -324,15 +349,19 @@ func main() {
 
 		cw.Write([]string{
 			f(t, 3), strconv.Itoa(int(s.phaseIdx.Load())), f(p.rate, 0),
-			f(frac(float64(iv.n), dt), 1), strconv.FormatUint(dropped-prevDropped, 10),
+			f(frac(float64(iv[0].n), dt), 1), strconv.FormatUint(dropped-prevDropped, 10),
 			strconv.Itoa(len(queue)),
-			f(iv.quantileMs(0.5), 3), f(iv.quantileMs(0.99), 3), f(iv.quantileMs(0.999), 3), f(iv.maxMs(), 3),
+			f(iv[0].quantileMs(0.5), 3), f(iv[0].quantileMs(0.99), 3), f(iv[0].quantileMs(0.999), 3), f(iv[0].maxMs(), 3),
+			f(iv[1].quantileMs(0.5), 3), f(iv[1].quantileMs(0.99), 3),
+			f(iv[2].quantileMs(0.5), 3), f(iv[2].quantileMs(0.99), 3),
 			strconv.FormatUint(uint64(cur.gcCycles), 10),
 			f(cur.heapLive/mib, 2), f(cur.heapGoal/mib, 2), f(cur.memTotal/mib, 2),
 			f(frac((cur.heapAllocs-prev.heapAllocs)/mib, dt), 1),
 			f(frac(cur.cpuGC-prev.cpuGC, cur.cpuTotal-prev.cpuTotal), 4),
 			f(frac(cur.cpuGC-prev.cpuGC, cur.busy()-prev.busy()), 4),
 			f(frac(cur.cpuAssist-prev.cpuAssist, cur.busy()-prev.busy()), 4),
+			f(frac(cur.cpuIdleMark-prev.cpuIdleMark, cur.busy()-prev.busy()), 4),
+			f(frac(cur.gcDemand()-prev.gcDemand(), cur.demand()-prev.demand()), 4),
 			gogcString(cur.gogc), limitString(cur.memLimit),
 		})
 
@@ -341,7 +370,7 @@ func main() {
 			w := cur
 			warm, warmT, warmDropped = &w, t, dropped
 		case warm != nil:
-			total.add(iv)
+			addAll()
 			peakMem = max(peakMem, cur.memTotal)
 			peakLive = max(peakLive, cur.heapLive)
 			sumMem += cur.memTotal
@@ -370,24 +399,26 @@ func main() {
 		WarmupSec:   warmT,
 		MeasuredSec: prevT - warmT,
 
-		Completed: total.n,
-		Dropped:   s.dropped.Load() - warmDropped,
-		LatencyMs: latencySummary{
-			P50: total.quantileMs(0.5), P90: total.quantileMs(0.9), P99: total.quantileMs(0.99),
-			P999: total.quantileMs(0.999), Max: total.maxMs(),
-		},
-		GCCycles:        uint64(end.gcCycles - warm.gcCycles),
-		GCCPUFrac:       frac(end.cpuGC-warm.cpuGC, end.cpuTotal-warm.cpuTotal),
-		GCBusyFrac:      frac(end.cpuGC-warm.cpuGC, end.busy()-warm.busy()),
-		AssistBusyFrac:  frac(end.cpuAssist-warm.cpuAssist, end.busy()-warm.busy()),
-		CPUMsPerRequest: frac((end.busy()-warm.busy())*1000, float64(total.n)),
-		PeakMemTotalMiB: peakMem / mib,
-		MeanMemTotalMiB: sumMem / float64(nIntervals) / mib,
-		PeakHeapLiveMiB: peakLive / mib,
-		FinalGOGC:       gogcString(end.gogc),
-		FinalLimitMiB:   limitString(end.memLimit),
+		Completed:          total[0].n,
+		Dropped:            s.dropped.Load() - warmDropped,
+		LatencyMs:          total[0].summary(),
+		ServiceMs:          total[1].summary(),
+		DispatchLagMs:      total[2].summary(),
+		GCCycles:           uint64(end.gcCycles - warm.gcCycles),
+		GCCPUFrac:          frac(end.cpuGC-warm.cpuGC, end.cpuTotal-warm.cpuTotal),
+		GCBusyFrac:         frac(end.cpuGC-warm.cpuGC, end.busy()-warm.busy()),
+		AssistBusyFrac:     frac(end.cpuAssist-warm.cpuAssist, end.busy()-warm.busy()),
+		CPUMsPerRequest:    frac((end.busy()-warm.busy())*1000, float64(total[0].n)),
+		IdleMarkFrac:       frac(end.cpuIdleMark-warm.cpuIdleMark, end.busy()-warm.busy()),
+		GCDemandFrac:       frac(end.gcDemand()-warm.gcDemand(), end.demand()-warm.demand()),
+		DemandMsPerRequest: frac((end.demand()-warm.demand())*1000, float64(total[0].n)),
+		PeakMemTotalMiB:    peakMem / mib,
+		MeanMemTotalMiB:    sumMem / float64(nIntervals) / mib,
+		PeakHeapLiveMiB:    peakLive / mib,
+		FinalGOGC:          gogcString(end.gogc),
+		FinalLimitMiB:      limitString(end.memLimit),
 	}
-	sum.ThroughputRPS = frac(float64(total.n), sum.MeasuredSec)
+	sum.ThroughputRPS = frac(float64(total[0].n), sum.MeasuredSec)
 	for _, p := range c.sched.phases {
 		sum.Phases = append(sum.Phases, p.String())
 	}
@@ -404,9 +435,13 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr,
 		"gcserve: %s GOMAXPROCS=%d | %.0f req/s, dropped %d | p50 %.2f p99 %.2f p99.9 %.2f max %.2f ms | "+
-			"gc %d cycles, gc_busy %.3f, assist_busy %.3f, %.3f cpu-ms/req | peak mem %.1f MiB, live %.1f MiB\n",
+			"svc p50 %.2f p99 %.2f | lag p50 %.2f p99 %.2f | "+
+			"gc %d cycles, gc_busy %.3f (idle mark %.3f, demand %.3f), assist_busy %.3f, %.4f cpu-ms/req (demand %.4f) | "+
+			"peak mem %.1f MiB, live %.1f MiB\n",
 		sum.GoVersion, sum.GOMAXPROCS, sum.ThroughputRPS, sum.Dropped,
 		sum.LatencyMs.P50, sum.LatencyMs.P99, sum.LatencyMs.P999, sum.LatencyMs.Max,
-		sum.GCCycles, sum.GCBusyFrac, sum.AssistBusyFrac, sum.CPUMsPerRequest,
+		sum.ServiceMs.P50, sum.ServiceMs.P99, sum.DispatchLagMs.P50, sum.DispatchLagMs.P99,
+		sum.GCCycles, sum.GCBusyFrac, sum.IdleMarkFrac, sum.GCDemandFrac, sum.AssistBusyFrac,
+		sum.CPUMsPerRequest, sum.DemandMsPerRequest,
 		sum.PeakMemTotalMiB, sum.PeakHeapLiveMiB)
 }

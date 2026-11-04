@@ -61,11 +61,12 @@ request latency, which is what an external client would see.
 | Metric | Source |
 |---|---|
 | Throughput | Under open-loop load, completed rate equals the offered rate until saturation. Report **CPU per request** (non-idle CPU / completed requests) and the **saturation rate** (highest rate without queue growth or drops) instead. |
-| Latency p50 / p99 / p99.9 | per-request timing from the scheduled arrival, log-linear histogram (at most 1.6% error), per interval and over the measured period |
+| Latency p50 / p99 / p99.9 | per-request timing from the scheduled arrival, log-linear histogram (at most 1.6% error), per interval and over the measured period. Two diagnostic splits: **service latency** (from the moment the generator actually queued the request) and **dispatch lag** (actual minus scheduled queue time). |
 | Memory: total runtime memory, live heap, heap goal | `runtime/metrics`: `/memory/classes/total:bytes`, `/gc/heap/live:bytes`, `/gc/heap/goal:bytes` |
 | Process RSS | OS (`/proc/self/status` on Linux) |
 | GC CPU fraction | `/cpu/classes/gc/total:cpu-seconds` divided by non-idle CPU (`total - idle`), so idle Ps do not dilute it. The week 1 definition (divided by all CPU) is kept as `gc_cpu_frac`. These metrics only advance at GC cycle ends, so per-interval values are 0 between cycles; use whole-run values. |
 | GC assist fraction | `/cpu/classes/gc/mark/assist:cpu-seconds` / non-idle CPU (the latency mechanism from the Twitch post) |
+| GC demand fraction | `(GC - idle mark) / (non-idle - idle mark)`, using `/cpu/classes/gc/mark/idle:cpu-seconds`. Idle-priority mark workers run on Ps that have nothing else to do, so they do not take CPU from the program; this is the GC cost the program actually pays. Also reported as `demand_cpu_ms_per_request`. **Primary GC CPU metric** (see Calibration). |
 | GC frequency | `/gc/cycles/total:gc-cycles`, cross-checked with `GODEBUG=gctrace=1` |
 
 ## Experimental control
@@ -91,3 +92,76 @@ request latency, which is what an external client would see.
   load. Is this timer or wake-up latency? Check before trusting sub-millisecond
   differences.
 - Controller inputs: heap goal vs. limit, GC CPU fraction, latency feedback, or a combination?
+- Each request does very little mutator work (about 5 us), so GC is 25-45% of the CPU
+  the program pays for. Real services likely spend less on GC. Should the main
+  experiments raise `-work` so GC is a smaller share? Decide in week 3.
+- Dispatch lag rises sharply during GC cycles (see Calibration). Is the cause
+  idle mark workers holding Ps when the generator's timer fires? Check with
+  `runtime/trace` before explaining it in the report.
+
+## Calibration (11/4, Windows dev machine, GOMAXPROCS = 4, single runs)
+
+Single 8-12 s runs, not yet repeated; the week 2 runner will redo these with
+repetitions. Raw files are in `results/scratch/` (not committed).
+
+**Latency floor.** `time.Sleep` wakes up late by about 0.35-0.55 ms at the median
+and about 1 ms at p99 on Windows. WSL2 is worse: wake-ups snap to a tick of about
+1.1 ms. With `GOGC=off`, measured latency is almost entirely this generator lag
+(rate 2000: p50 0.34 / p99 0.95 ms total vs. 0.34 / 0.94 ms lag; service time
+below 5 us). So **differences below about 1 ms at p50/p99 are timer noise**, on
+either OS. GC effects show up from a few ms upward, so the scheduled-time
+latency stays the main metric.
+
+**GC delays dispatch, not just service.** With GOGC = 100 at 2000 req/s, p99.9 is
+7.9 ms, of which dispatch lag is 7.4 ms and service time only 1.7 ms. At 30000
+req/s, p99 is 14.9 ms with dispatch lag p99 12.4 ms. During a GC cycle the
+generator goroutine is scheduled late. A network-reading goroutine in a real
+server would be delayed the same way, which is why measuring from the scheduled
+time matters. Assists are small here (2-6% of non-idle CPU at GOGC >= 100).
+
+**Saturation** (GOGC = 100, cache 128 MiB): no queue build-up up to 60000 req/s
+(p50 0.61 ms); at 70000, p50 jumps to 3.6 ms and the queue grows. Saturation is
+about **65000 req/s**. Load levels for the experiments:
+
+| Level | Rate | Share of saturation | Allocation rate (32 KiB/req) |
+|---|---|---|---|
+| low | 10000 req/s | ~15% | ~310 MiB/s |
+| medium | 30000 req/s | ~45% | ~940 MiB/s |
+| high | 50000 req/s | ~75% | ~1.5 GiB/s |
+
+These allocation rates are higher than the week 1 plan (50/200/800 MiB/s); lower
+`-req` if those levels are needed. Saturation at GOGC = 50 was not measured and is
+probably lower, since CPU per request is higher.
+
+**Live heap vs. cache size.** Peak live heap is the cache plus an overhead that
+grows with both rate and cache size (objects allocated during marking count as
+live for that cycle):
+
+| Cache | Peak live @ 2000 req/s | Peak live @ 30000 req/s |
+|---|---|---|
+| 64 MiB | 66.5 MiB | 92.3 MiB |
+| 256 MiB | 261.4 MiB | 309.7 MiB |
+| 512 MiB | 517.9 MiB | 601.5 MiB |
+
+So memory budgets must come from the peak live heap measured *at the same rate*,
+not from `-cache`. Example: cache 128 MiB at 30000 req/s has a peak live heap of
+about 150 MiB, so the 1.5x and 1.2x budgets are about 225 and 180 MiB. Note that
+GOMEMLIMIT caps total runtime memory, not just the heap.
+
+**GOGC still works as the cost model predicts** (30000 req/s, cache 128 MiB):
+
+| GOGC | GC cycles (9 s) | p99 | CPU/req (incl. idle mark) | Peak memory |
+|---|---|---|---|---|
+| 50 | 125 | 20.0 ms | 0.058 ms | 260 MiB |
+| 100 | 70 | 17.2 ms | 0.035 ms | 346 MiB |
+| 200 | 37 | 15.1 ms | 0.019 ms | 455 MiB |
+| 400 | 17 | 10.8 ms | 0.010 ms | 775 MiB |
+
+(This sweep ran before idle marking was split out. A rerun of GOGC = 50 and 400
+gave a demand CPU per request of 0.027 vs. 0.005 ms.)
+
+**Why GC demand, not GC busy.** In that sweep, GC's share of non-idle CPU barely
+moved (0.67 to 0.51) while CPU per request fell 5x. The reason: during each cycle,
+idle-priority mark workers fill otherwise idle Ps, and they make up 36-44% of
+non-idle CPU at this load. Leaving them out, GC's share is 0.45 at GOGC = 50 and
+0.25 at GOGC = 400, which tracks the setting as expected.

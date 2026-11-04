@@ -56,9 +56,17 @@ type server struct {
 	cache      cache
 	entryKiB   int
 	entryNodes int
-	hist       hist
+	hist       hist // latency from scheduled arrival (main metric)
+	svcHist    hist // latency from actual dispatch (excludes generator lag)
+	lagHist    hist // dispatch time minus scheduled time
 	dropped    atomic.Uint64
 	sink       atomic.Uint64
+}
+
+// arrival is one queued request; times are nanoseconds since server.start.
+type arrival struct {
+	sched int64 // when the request should have arrived
+	sent  int64 // when the generator actually queued it
 }
 
 func newServer(sch *schedule, entryKiB int) *server {
@@ -89,12 +97,11 @@ func (s *server) applyPhase(i int, p *phase) {
 	s.phaseIdx.Store(int64(i))
 }
 
-// worker handles requests until the queue is closed. Each queue item is the
-// request's scheduled arrival time in nanoseconds since s.start.
-func (s *server) worker(id int, seed uint64, queue <-chan int64) {
+// worker handles requests until the queue is closed.
+func (s *server) worker(id int, seed uint64, queue <-chan arrival) {
 	rng := rand.New(rand.NewPCG(seed, uint64(id)))
 	var acc uint64
-	for t0 := range queue {
+	for a := range queue {
 		p := s.cur.Load()
 		tree := buildTree(p.reqKiB<<10/nodeSize, rng.Uint64())
 		for range p.work {
@@ -111,8 +118,9 @@ func (s *server) worker(id int, seed uint64, queue <-chan int64) {
 				s.cache.slots[rng.IntN(n)].Store(buildTree(s.entryNodes, acc))
 			}
 		}
-		lat := time.Since(s.start).Nanoseconds() - t0
-		s.hist.record(uint64(max(lat, 0)) / 1000)
+		now := time.Since(s.start).Nanoseconds()
+		s.hist.record(uint64(max(now-a.sched, 0)) / 1000)
+		s.svcHist.record(uint64(max(now-a.sent, 0)) / 1000)
 	}
 	s.sink.Add(acc)
 }
@@ -122,7 +130,10 @@ func (s *server) worker(id int, seed uint64, queue <-chan int64) {
 // up late, it catches up by emitting all overdue arrivals at once, so a stall
 // (for example a GC pause) shows up as latency instead of as missing load.
 // When the queue is full the request is dropped and counted.
-func (s *server) generate(sch *schedule, end time.Duration, seed uint64, queue chan<- int64) {
+//
+// Timer wake-ups are coarse (about 0.4 ms late on Windows, about 1 ms under
+// WSL2), so lagHist records how late each arrival was actually dispatched.
+func (s *server) generate(sch *schedule, end time.Duration, seed uint64, queue chan<- arrival) {
 	rng := rand.New(rand.NewPCG(seed, 0xa11ce))
 	cur := -1
 	next := time.Duration(0)
@@ -137,8 +148,10 @@ func (s *server) generate(sch *schedule, end time.Duration, seed uint64, queue c
 			cur = idx
 		}
 		if emit {
+			sent := time.Since(s.start).Nanoseconds()
 			select {
-			case queue <- int64(next):
+			case queue <- arrival{sched: int64(next), sent: sent}:
+				s.lagHist.record(uint64(max(sent-int64(next), 0)) / 1000)
 			default:
 				s.dropped.Add(1)
 			}
