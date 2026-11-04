@@ -24,6 +24,7 @@ Weekly progress notes are in [`docs/`](docs/). Week 1: [progress](docs/week1-pro
 ```
 cmd/gcprobe/     minimal allocation workload + runtime/metrics sampler (week 1)
 cmd/gcserve/     request-serving workload with open-loop load and latency (week 2)
+experiments/     experiment matrices for scripts/run_matrix.py
 docs/            background notes, experiment design, weekly progress
 readings/        reading list by topic, plus local copies of openly licensed Go docs
 scripts/         experiment and plotting scripts
@@ -56,3 +57,12 @@ GOMAXPROCS=4 go run ./cmd/gcserve -phases "15s:rate=2000,cache=64;15s:rate=8000,
 
 `gcserve` writes a per-interval CSV (latency percentiles + runtime metrics) and a JSON
 summary of the run after warm-up. Run `go run ./cmd/gcserve -h` for all flags.
+
+```bash
+# experiment matrix (workloads x GC configs x repetitions), then median + CI and plot
+python scripts/run_matrix.py experiments/pilot.json        # --dry-run to preview
+python scripts/aggregate.py results/week2-pilot
+```
+
+Matrix files live in `experiments/`; see the docstring of `scripts/run_matrix.py`
+for the format.

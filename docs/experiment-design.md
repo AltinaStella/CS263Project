@@ -78,8 +78,14 @@ request latency, which is what an external client would see.
   is prefilled and a GC runs before the clock starts, so steady-state runs settle
   quickly. Phase-change runs need their own warm-up choice, since the live heap
   keeps growing after the switch.
-- **Repetitions:** at least 5 runs per configuration; report median and 95% confidence interval.
-- **Metadata:** every run writes Go version, flags, environment variables, and a timestamp next to its CSV.
+- **Repetitions:** at least 5 runs per configuration; report the median with a
+  distribution-free (order-statistic) confidence interval. With 5 runs this is
+  [min, max] at 93.8% coverage; 95% needs at least 6 runs. `scripts/run_matrix.py`
+  shuffles run order within each repetition (against machine drift) and gives all
+  configs in a repetition the same seed (same arrival sequence).
+- **Metadata:** every run writes Go version, flags, environment variables, and a
+  timestamp next to its CSV. Each matrix also writes `run_info.json` with CPU model,
+  RAM, OS, git commit (and whether the code was dirty), and the matrix itself.
 
 ## Week 1 validation
 
