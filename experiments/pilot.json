@@ -1,6 +1,6 @@
 {
   "name": "week2-pilot",
-  "reps": 5,
+  "reps": 6,
   "gomaxprocs": 4,
   "cooldown": 2,
   "common": {"duration": "20s", "warmup": "5s", "cache": 128},
