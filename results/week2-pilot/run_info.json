@@ -1,0 +1,43 @@
+{
+  "started": "2026-11-08T23:43:44+00:00",
+  "go_version": "go version go1.27.3 windows/amd64",
+  "git_commit": "5d7743fc7ee8b9eba821fcb383afde594372bf4a",
+  "git_dirty": false,
+  "os": "Windows-11-10.0.26300-SP0",
+  "cpu": "Intel(R) Core(TM) i9-14900HX",
+  "logical_cpus": 32,
+  "ram_gib": 31.6,
+  "gomaxprocs": "4",
+  "matrix": {
+    "name": "week2-pilot",
+    "reps": 6,
+    "gomaxprocs": 4,
+    "cooldown": 2,
+    "common": {
+      "duration": "20s",
+      "warmup": "5s",
+      "cache": 128
+    },
+    "workloads": {
+      "steady-med": {
+        "rate": 30000
+      },
+      "phase": {
+        "phases": "10s:rate=10000,cache=64;15s:rate=40000,cache=256",
+        "warmup": "5s"
+      }
+    },
+    "configs": {
+      "default": {},
+      "gogc50": {
+        "gogc": "50"
+      },
+      "gogc200": {
+        "gogc": "200"
+      },
+      "gogc400": {
+        "gogc": "400"
+      }
+    }
+  }
+}

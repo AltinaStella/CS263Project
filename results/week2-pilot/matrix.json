@@ -1,0 +1,17 @@
+{
+  "name": "week2-pilot",
+  "reps": 6,
+  "gomaxprocs": 4,
+  "cooldown": 2,
+  "common": {"duration": "20s", "warmup": "5s", "cache": 128},
+  "workloads": {
+    "steady-med": {"rate": 30000},
+    "phase": {"phases": "10s:rate=10000,cache=64;15s:rate=40000,cache=256", "warmup": "5s"}
+  },
+  "configs": {
+    "default": {},
+    "gogc50": {"gogc": "50"},
+    "gogc200": {"gogc": "200"},
+    "gogc400": {"gogc": "400"}
+  }
+}
