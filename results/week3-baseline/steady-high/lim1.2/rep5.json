@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-12T11:18:30Z",
+  "go_version": "go1.27.3",
+  "os": "windows/amd64",
+  "num_cpu": 32,
+  "gomaxprocs": 4,
+  "env": {
+    "GOMAXPROCS": "4"
+  },
+  "args": [
+    "-duration",
+    "20s",
+    "-warmup",
+    "5s",
+    "-cache",
+    "128",
+    "-rate",
+    "50000",
+    "-memlimit",
+    "233",
+    "-seed",
+    "5",
+    "-out",
+    "C:\\Users\\a1434\\Desktop\\documents\\2026Fall\\CS263\\CS263Project\\results\\week3-baseline\\steady-high\\lim1.2\\rep5.csv"
+  ],
+  "phases": [
+    "20s:rate=50000,req=32,cache=128,work=1,churn=0.05"
+  ],
+  "loop": false,
+  "warmup_sec": 5.0003241,
+  "measured_sec": 15.2070853,
+  "completed": 749338,
+  "dropped": 0,
+  "throughput_rps": 49275.5834019028,
+  "latency_ms": {
+    "p50": 3.583,
+    "p90": 198.655,
+    "p99": 227.327,
+    "p999": 247.807,
+    "max": 1023.999
+  },
+  "service_ms": {
+    "p50": 1.151,
+    "p90": 190.463,
+    "p99": 221.183,
+    "p999": 231.423,
+    "max": 1023.999
+  },
+  "dispatch_lag_ms": {
+    "p50": 1.199,
+    "p90": 10.367,
+    "p99": 24.575,
+    "p999": 40.447,
+    "max": 49.151
+  },
+  "gc_cycles": 490,
+  "gc_cpu_frac": 0.4645849057775889,
+  "gc_busy_frac": 0.5880563514493998,
+  "assist_busy_frac": 0.27854386332874304,
+  "cpu_ms_per_request": 0.06401683138984009,
+  "idle_mark_busy_frac": 0.1171119611806689,
+  "gc_demand_frac": 0.5334134902297641,
+  "demand_cpu_ms_per_request": 0.05651969471720372,
+  "peak_mem_total_mib": 345.869140625,
+  "mean_mem_total_mib": 259.443359375,
+  "peak_heap_live_mib": 203.85775756835938,
+  "final_gogc": "100",
+  "final_memlimit_mib": "233.0"
+}

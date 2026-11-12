@@ -12,12 +12,12 @@ This project investigates whether adaptive garbage collection tuning can improve
 |---|---|---|
 | 1 | Background research and experimental design | Done |
 | 2 | Workload implementation | Done |
-| 3 | Baseline evaluation (default and fixed GC configurations) | In progress |
-| 4 | Adaptive controller implementation | |
+| 3 | Baseline evaluation (default and fixed GC configurations) | Done |
+| 4 | Adaptive controller implementation | In progress |
 | 5 | Comparative evaluation, analysis, and final report | |
 
 Weekly progress notes are in [`docs/`](docs/). Week 1: [progress](docs/week1-progress.md),
-[reading list](readings/README.md), [reading log](docs/reading-log.md). Week 2: [progress](docs/week2-progress.md).
+[reading list](readings/README.md), [reading log](docs/reading-log.md). Week 2: [progress](docs/week2-progress.md). Week 3: [progress](docs/week3-progress.md).
 
 ## Repository layout
 

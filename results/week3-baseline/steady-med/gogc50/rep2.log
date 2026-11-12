@@ -1,0 +1,1 @@
+gcserve: go1.27.3 GOMAXPROCS=4 | 29952 req/s, dropped 0 | p50 0.48 p99 15.10 p99.9 22.02 max 40.45 ms | svc p50 0.00 p99 4.67 | lag p50 0.45 p99 12.93 | gc 258 cycles, gc_busy 0.713 (idle mark 0.440, demand 0.487), assist_busy 0.077, 0.0487 cpu-ms/req (demand 0.0273) | peak mem 246.8 MiB, live 149.8 MiB

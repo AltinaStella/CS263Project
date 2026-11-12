@@ -1,0 +1,16 @@
+workload,budget,budget_mib,config,p99_ms,p999_ms,peak_mem_mib,gc_demand
+steady-low,none,,gogc400,1.01,11.71,697.0,0.277
+steady-low,1.5x,208.0,gogc50,11.9,15.74,216.0,0.495
+steady-low,1.2x,167.0,off-lim1.2,14.59,19.58,168.0,0.627
+steady-med,none,,gogc400,9.28,16.19,754.0,0.257
+steady-med,1.5x,240.0,lim1.5,15.17,23.94,243.0,0.527
+steady-med,1.2x,,(none fits),,,,
+steady-high,none,,gogc400,12.22,18.82,914.0,0.237
+steady-high,1.5x,291.0,lim1.5,15.17,25.98,289.0,0.493
+steady-high,1.2x,,(none fits),,,,
+bursty,none,,gogc400,9.47,15.62,834.0,0.257
+bursty,1.5x,267.0,lim1.5,13.25,23.81,264.0,0.5
+bursty,1.2x,214.0,off-lim1.2,51.2,69.63,216.0,0.574
+phase,none,,gogc400,11.46,19.2,1541.0,0.236
+phase,1.5x,513.0,lim1.5,17.92,35.71,498.0,0.516
+phase,1.2x,,(none fits),,,,

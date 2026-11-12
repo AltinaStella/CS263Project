@@ -1,0 +1,71 @@
+{
+  "started": "2026-11-12T10:12:46+00:00",
+  "go_version": "go version go1.27.3 windows/amd64",
+  "git_commit": "37be7ca65f21ec20dcb0061e26442d8d27c42309",
+  "git_dirty": false,
+  "os": "Windows-11-10.0.26300-SP0",
+  "cpu": "Intel(R) Core(TM) i9-14900HX",
+  "logical_cpus": 32,
+  "ram_gib": 31.6,
+  "gomaxprocs": "4",
+  "matrix": {
+    "name": "week3-baseline",
+    "reps": 6,
+    "gomaxprocs": 4,
+    "cooldown": 2,
+    "common": {
+      "duration": "20s",
+      "warmup": "5s",
+      "cache": 128
+    },
+    "workloads": {
+      "steady-low": {
+        "rate": 10000,
+        "live_mib": 139
+      },
+      "steady-med": {
+        "rate": 30000,
+        "live_mib": 160
+      },
+      "steady-high": {
+        "rate": 50000,
+        "live_mib": 194
+      },
+      "bursty": {
+        "phases": "4s:rate=10000;1s:rate=50000",
+        "loop": true,
+        "live_mib": 178
+      },
+      "phase": {
+        "phases": "10s:rate=10000,cache=64;15s:rate=40000,cache=256",
+        "live_mib": 342
+      }
+    },
+    "configs": {
+      "gogc50": {
+        "gogc": "50"
+      },
+      "default": {},
+      "gogc200": {
+        "gogc": "200"
+      },
+      "gogc400": {
+        "gogc": "400"
+      },
+      "lim1.5": {
+        "memlimit_x": 1.5
+      },
+      "lim1.2": {
+        "memlimit_x": 1.2
+      },
+      "off-lim1.5": {
+        "gogc": "off",
+        "memlimit_x": 1.5
+      },
+      "off-lim1.2": {
+        "gogc": "off",
+        "memlimit_x": 1.2
+      }
+    }
+  }
+}
