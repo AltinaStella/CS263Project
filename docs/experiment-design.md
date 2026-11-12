@@ -98,12 +98,42 @@ request latency, which is what an external client would see.
   load. Is this timer or wake-up latency? Check before trusting sub-millisecond
   differences.
 - Controller inputs: heap goal vs. limit, GC CPU fraction, latency feedback, or a combination?
-- Each request does very little mutator work (about 5 us), so GC is 25-45% of the CPU
-  the program pays for. Real services likely spend less on GC. Should the main
-  experiments raise `-work` so GC is a smaller share? Decide in week 3.
-- Dispatch lag rises sharply during GC cycles (see Calibration). Is the cause
-  idle mark workers holding Ps when the generator's timer fires? Check with
-  `runtime/trace` before explaining it in the report.
+- ~~Raise `-work` so GC is a smaller CPU share?~~ Decided in week 3: keep
+  `-work 1`. At 30000 req/s, `-work 8` only raises demand CPU per request from
+  14.7 to 19.6 us and lowers the GC demand share from 0.42 to 0.30; getting near a
+  typical service would need `-work` in the tens and a new saturation calibration.
+  The GC share is therefore high compared with real services; state this as a
+  limitation in the report.
+- ~~Why does dispatch lag rise during GC?~~ Answered in week 3 with
+  `runtime/trace` (see "Dispatch lag and the GC mark phase" in Calibration).
+
+## Dispatch lag and the GC mark phase (week 3, 11/12)
+
+`gcserve -trace` records a `runtime/trace`; a small analyzer (built on
+`golang.org/x/exp/trace`, kept outside the repo) measures how long the generator
+goroutine waits between becoming runnable (timer fired) and running, and what
+was running on the Ps at that moment. 30000 req/s, cache 128 MiB, 8 s run:
+
+| GOGC | Wakes | Sched latency outside mark (p50 / p99) | During mark (p50 / p99) |
+|---|---|---|---|
+| 100 | 6273 | 61 / 245 us | 892 us / 13.7 ms |
+| off | 7294 | 110 / 402 us | (no GC) |
+
+With GOGC = 100, 93 of the 96 waits longer than 1 ms happened during the mark
+phase, and in 95 of them at least one GC mark worker was running. The 13.7 ms p99
+wait during marking matches the 12.5 ms p99 dispatch lag of the same run. So the
+lag is the generator waiting for a P while mark workers occupy them. (All 4 Ps
+were busy in only 53 of the 96 cases, so the wait is not only lack of a free P;
+the exact scheduler path is not examined further.)
+
+Consequence for the design: a goroutine reading requests from the network in a
+real server would wait in the same way, so the in-process generator is kept and
+latency stays measured from the scheduled arrival.
+
+Side observation: GOGC = off *without* a memory limit grew to 8 GiB in 8 s and
+service p99 rose to 72 ms (the cost of constantly mapping fresh memory), so it is
+not a useful baseline on its own; the matrix uses GOGC = off only together with
+GOMEMLIMIT.
 
 ## Calibration (11/4, Windows dev machine, GOMAXPROCS = 4, single runs)
 

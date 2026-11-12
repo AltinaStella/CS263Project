@@ -14,6 +14,10 @@ The matrix file (JSON) has:
 
 Flags are merged as common < workload < config and passed as -key value
 (true -> bare -key). Each run writes
+
+Memory budgets relative to each workload: give a workload "live_mib" (its
+measured peak live heap) and a config "memlimit_x" (e.g. 1.5); the runner then
+passes -memlimit round(memlimit_x * live_mib). Neither key reaches gcserve.
     results/<name>/<workload>/<config>/rep<k>.{csv,json,log}
 and results/<name>/run_info.json records the machine, toolchain, git commit,
 and the matrix itself.
@@ -37,6 +41,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 EXE = ROOT / "bin" / ("gcserve.exe" if os.name == "nt" else "gcserve")
 RESERVED = {"out", "summary", "seed"}  # set by the runner
+META = {"live_mib", "memlimit_x"}  # runner-only keys, resolved in run_flags
+
+
+def run_flags(m, w, c):
+    """Merge common < workload < config flags and resolve relative memory budgets."""
+    flags = {**m.get("common", {}), **m["workloads"][w], **m["configs"][c]}
+    x = flags.get("memlimit_x")
+    if x is not None:
+        live = flags.get("live_mib")
+        if live is None:
+            sys.exit(f"config {c} uses memlimit_x but workload {w} has no live_mib")
+        flags["memlimit"] = round(float(x) * float(live))
+    return {k: v for k, v in flags.items() if k not in META}
 
 
 def sh(*cmd):
@@ -101,8 +118,7 @@ def main():
 
     if a.dry_run:
         for rep, w, c in plan:
-            flags = {**m.get("common", {}), **m["workloads"][w], **m["configs"][c]}
-            print(f"rep{rep} {w}/{c}: {' '.join(to_args(flags))}")
+            print(f"rep{rep} {w}/{c}: {' '.join(to_args(run_flags(m, w, c)))}")
         print(f"{len(plan)} runs")
         return
 
@@ -141,8 +157,7 @@ def main():
         if a.resume and base.with_suffix(".json").exists():
             continue
         d.mkdir(parents=True, exist_ok=True)
-        flags = {**m.get("common", {}), **m["workloads"][w], **m["configs"][c]}
-        cmd = [str(EXE), *to_args(flags), "-seed", str(rep), "-out", str(base.with_suffix(".csv"))]
+        cmd = [str(EXE), *to_args(run_flags(m, w, c)), "-seed", str(rep), "-out", str(base.with_suffix(".csv"))]
         print(f"[{i}/{len(plan)}] rep{rep} {w}/{c}", flush=True)
         with open(base.with_suffix(".log"), "w") as log:
             r = subprocess.run(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)

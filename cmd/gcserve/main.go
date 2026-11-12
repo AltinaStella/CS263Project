@@ -31,6 +31,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"runtime/metrics"
+	"runtime/trace"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,7 @@ type config struct {
 	memLimit int64 // bytes, 0 = not set
 	out      string
 	summary  string
+	trace    string
 }
 
 func fail(format string, a ...any) {
@@ -81,6 +83,7 @@ func parseFlags() config {
 	flag.Int64Var(&memLimitMiB, "memlimit", 0, "override GOMEMLIMIT in MiB; 0 = use environment")
 	flag.StringVar(&c.out, "out", "results/gcserve.csv", "per-interval CSV, '-' for stdout")
 	flag.StringVar(&c.summary, "summary", "", "summary JSON path (default: -out with .json)")
+	flag.StringVar(&c.trace, "trace", "", "write a runtime/trace of the whole run to this file")
 	flag.Parse()
 
 	if err := base.validate(); err != nil {
@@ -282,6 +285,18 @@ func main() {
 	s.prefill(&c.sched.phases[0])
 	s.applyPhase(0, &c.sched.phases[0])
 	runtime.GC() // start from a collected heap that holds only the cache
+
+	if c.trace != "" {
+		tf, err := os.Create(c.trace)
+		if err != nil {
+			fail("%v", err)
+		}
+		defer tf.Close()
+		if err := trace.Start(tf); err != nil {
+			fail("starting trace: %v", err)
+		}
+		defer trace.Stop()
+	}
 
 	rt := newRTReader()
 	queue := make(chan arrival, c.queueCap)

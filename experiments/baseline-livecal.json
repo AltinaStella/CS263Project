@@ -1,0 +1,17 @@
+{
+  "name": "scratch/baseline-livecal",
+  "reps": 3,
+  "gomaxprocs": 4,
+  "cooldown": 2,
+  "common": {"duration": "20s", "warmup": "5s", "cache": 128},
+  "workloads": {
+    "steady-low": {"rate": 10000},
+    "steady-med": {"rate": 30000},
+    "steady-high": {"rate": 50000},
+    "bursty": {"phases": "4s:rate=10000;1s:rate=50000", "loop": true},
+    "phase": {"phases": "10s:rate=10000,cache=64;15s:rate=40000,cache=256"}
+  },
+  "configs": {
+    "default": {}
+  }
+}
